@@ -52,7 +52,7 @@ fi
 
 # Prepare LDAP_ADMIN_PASSWORD for Bitnami's entrypoint if LDAP_ADMIN_PASSWORD_FILE is used
 if [ -n "$LDAP_ADMIN_PASSWORD_FILE" ] && [ -f "$LDAP_ADMIN_PASSWORD_FILE" ]; then
-    export LDAP_ADMIN_PASSWORD="\$(cat "\$LDAP_ADMIN_PASSWORD_FILE")"
+    export LDAP_ADMIN_PASSWORD="$(cat "$LDAP_ADMIN_PASSWORD_FILE")"
 fi
 
 # Background task to check/update TLS config and password
@@ -77,20 +77,20 @@ EOF
     fi
 
     if [ -n "$LDAP_ADMIN_PASSWORD_FILE" ] && [ -f "$LDAP_ADMIN_PASSWORD_FILE" ]; then
-        DB_DN=\$(ldapsearch -Y EXTERNAL -H ldapi:/// -b cn=config "(olcRootDN=*)" dn -LLL | awk '/^dn: / {print \$2}')
-        ADMIN_DN=\$(ldapsearch -Y EXTERNAL -H ldapi:/// -b cn=config "(olcRootDN=*)" olcRootDN -LLL | awk -F': ' '/^olcRootDN: / {print \$2}')
-        if [ -n "\$DB_DN" ] && [ -n "\$ADMIN_DN" ]; then
-            if ! ldapwhoami -x -D "\$ADMIN_DN" -y "$LDAP_ADMIN_PASSWORD_FILE" -H ldapi:/// >/dev/null 2>&1; then
-                NEW_HASH=\$(slappasswd -h {SSHA} -y "$LDAP_ADMIN_PASSWORD_FILE")
+        DB_DN=$(ldapsearch -Y EXTERNAL -H ldapi:/// -b cn=config "(olcRootDN=*)" dn -LLL | awk '/^dn: / {print $2}')
+        ADMIN_DN=$(ldapsearch -Y EXTERNAL -H ldapi:/// -b cn=config "(olcRootDN=*)" olcRootDN -LLL | awk -F': ' '/^olcRootDN: / {print $2}')
+        if [ -n "$DB_DN" ] && [ -n "$ADMIN_DN" ]; then
+            if ! ldapwhoami -x -D "$ADMIN_DN" -y "$LDAP_ADMIN_PASSWORD_FILE" -H ldapi:/// >/dev/null 2>&1; then
+                NEW_HASH=$(slappasswd -h {SSHA} -y "$LDAP_ADMIN_PASSWORD_FILE")
                 ldapmodify -Y EXTERNAL -H ldapi:/// <<EOF
-dn: \$DB_DN
+dn: $DB_DN
 changetype: modify
 replace: olcRootPW
-olcRootPW: \$NEW_HASH
+olcRootPW: $NEW_HASH
 EOF
             fi
         fi
     fi
 ) &
 
-exec /opt/bitnami/scripts/openldap/entrypoint.sh "\$@"
+exec /opt/bitnami/scripts/openldap/entrypoint.sh "$@"
