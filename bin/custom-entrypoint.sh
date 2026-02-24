@@ -88,13 +88,39 @@ elif [ -n "$LDAP_ADMIN_PASSWORD" ]; then
     CURRENT_PASSWORD="$LDAP_ADMIN_PASSWORD"
 fi
 
-if [ -n "$CURRENT_PASSWORD" ]; then
-    (
-        # Wait until ldap is ready on ldapi:///
-        while ! ldapsearch -Y EXTERNAL -H ldapi:/// -b cn=config -s base >/dev/null 2>&1; do
-            sleep 2
-        done
+# Background task to check and update TLS configuration and admin password on startup if they diverge
+(
+    # Wait until ldap is ready on ldapi:///
+    while ! ldapsearch -Y EXTERNAL -H ldapi:/// -b cn=config -s base >/dev/null 2>&1; do
+        sleep 2
+    done
+    
+    # Check and configure TLS if missing
+    if [ "${LDAP_ENABLE_TLS:-no}" = "yes" ]; then
+        CERT_FILE="${LDAP_TLS_CERT_FILE:-/opt/bitnami/openldap/certs/openldap.crt}"
+        KEY_FILE="${LDAP_TLS_KEY_FILE:-/opt/bitnami/openldap/certs/openldap.key}"
+        CA_FILE="${LDAP_TLS_CA_FILE:-/opt/bitnami/openldap/certs/openldapCA.crt}"
         
+        # Check if TLS is already configured
+        if ! ldapsearch -Y EXTERNAL -H ldapi:/// -b cn=config -s base "(olcTLSCertificateFile=*)" olcTLSCertificateFile | grep -q "^olcTLSCertificateFile:"; then
+            echo "TLS enabled but not configured in database. Updating cn=config..."
+            ldapmodify -Y EXTERNAL -H ldapi:/// <<EOF
+dn: cn=config
+changetype: modify
+replace: olcTLSCACertificateFile
+olcTLSCACertificateFile: $CA_FILE
+-
+replace: olcTLSCertificateFile
+olcTLSCertificateFile: $CERT_FILE
+-
+replace: olcTLSCertificateKeyFile
+olcTLSCertificateKeyFile: $KEY_FILE
+EOF
+            echo "TLS configuration updated in database."
+        fi
+    fi
+
+    if [ -n "$CURRENT_PASSWORD" ]; then
         # Extract the DB DN and Admin DN from the live configuration
         DB_DN=$(ldapsearch -Y EXTERNAL -H ldapi:/// -b cn=config "(olcRootDN=*)" dn -LLL | grep ^dn: | head -n 1 | awk '{print $2}')
         ADMIN_DN=$(ldapsearch -Y EXTERNAL -H ldapi:/// -b cn=config "(olcRootDN=*)" olcRootDN -LLL | grep ^olcRootDN: | head -n 1 | awk -F": " '{print $2}')
@@ -117,8 +143,8 @@ EOF
                 fi
             fi
         fi
-    ) &
-fi
+    fi
+) &
 
 # Execute Bitnami's entrypoint which handles the rest, passing all arguments
 exec /opt/bitnami/scripts/openldap/entrypoint.sh "$@"
