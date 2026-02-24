@@ -18,12 +18,14 @@ RUN mkdir -p /opt/bitnami/openldap/certs && \
         -out /opt/bitnami/openldap/certs/openldap.crt && \
     cp /opt/bitnami/openldap/certs/openldap.crt /opt/bitnami/openldap/certs/openldapCA.crt && \
     chown -R 1001:root /opt/bitnami/openldap/certs && \
-    chmod -R a+r /opt/bitnami/openldap/certs
+    chmod -R a+rX /opt/bitnami/openldap/certs
 
 # Copy our custom initialization script.
 # Bitnami's entrypoint will automatically execute this at the right time.
 COPY bin/99-custom-setup.sh /docker-entrypoint-initdb.d/99-custom-setup.sh
 RUN chmod +x /docker-entrypoint-initdb.d/99-custom-setup.sh
 
-# Revert to the default non-root user for the final image state
-USER 1001
+# NOTE: Removed 'USER 1001' here. The container will start as root,
+#       allowing Bitnami's entrypoint to perform its setup tasks (including
+#       directory creation and permission adjustments) as root, then
+#       it will internally drop privileges to user 1001 for the slapd process.
