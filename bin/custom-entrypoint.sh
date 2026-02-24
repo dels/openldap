@@ -2,6 +2,39 @@
 # /exec/custom-entrypoint.sh
 set -e
 
+# If running as root, fix volume permissions and drop to unprivileged user
+if [ "$(id -u)" = "0" ]; then
+    echo "Running as root. Fixing permissions for /bitnami/openldap..."
+    mkdir -p /bitnami/openldap/data
+    chown -R 1001:1001 /bitnami/openldap
+    # Execute the script again as user 1001 using gosu
+    exec gosu 1001 "$0" "$@"
+fi
+
+# Generate snakeoil TLS certificate if enabled and missing
+if [ "${LDAP_ENABLE_TLS:-no}" = "yes" ]; then
+    CERT_FILE="${LDAP_TLS_CERT_FILE:-/opt/bitnami/openldap/certs/openldap.crt}"
+    KEY_FILE="${LDAP_TLS_KEY_FILE:-/opt/bitnami/openldap/certs/openldap.key}"
+    CA_FILE="${LDAP_TLS_CA_FILE:-/opt/bitnami/openldap/certs/openldapCA.crt}"
+    
+    CERT_DIR=$(dirname "$CERT_FILE")
+    mkdir -p "$CERT_DIR"
+
+    if [ ! -f "$CERT_FILE" ] || [ ! -f "$KEY_FILE" ]; then
+        echo "TLS enabled but certificates not found. Generating self-signed (snakeoil) certificates..."
+        # Generate CA
+        openssl req -new -x509 -nodes -days 3650 -subj "/CN=LDAP-Local-CA" -keyout "$CA_FILE" -out "$CA_FILE"
+        # Generate Server Cert
+        openssl req -new -newkey rsa:4096 -days 3650 -nodes -x509 \
+            -subj "/CN=${LDAP_DOMAIN:-localhost}" \
+            -keyout "$KEY_FILE" \
+            -out "$CERT_FILE"
+        echo "Certificates generated successfully at $CERT_DIR"
+    else
+        echo "TLS certificates already exist at $CERT_DIR"
+    fi
+fi
+
 # Map generic LDAP variables to Bitnami-specific variables
 if [ -n "$LDAP_BASE_DN" ]; then
     export LDAP_ROOT="$LDAP_BASE_DN"
