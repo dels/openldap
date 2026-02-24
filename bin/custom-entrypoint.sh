@@ -2,20 +2,6 @@
 # /exec/custom-entrypoint.sh
 set -e
 
-# If running as root, fix volume permissions and drop to unprivileged user
-if [ "$(id -u)" = "0" ]; then
-    # Ensure the base directory exists
-    mkdir -p /bitnami/openldap
-    # On first run, the volume will be owned by root. Fix ownership.
-    # On subsequent runs, the owner will be 1001, so this check will be skipped, avoiding permission errors.
-    if [ "$(stat -c '%u' /bitnami/openldap)" != "1001" ]; then
-        echo "Volume owned by root, setting initial permissions..."
-        chown -R 1001:1001 /bitnami/openldap
-    fi
-    # Execute the script again as user 1001 using gosu
-    exec gosu 1001 "$0" "$@"
-fi
-
 # Generate snakeoil TLS certificate if enabled and missing
 if [ "${LDAP_ENABLE_TLS:-no}" = "yes" ]; then
     CERT_FILE="${LDAP_TLS_CERT_FILE:-/opt/bitnami/openldap/certs/openldap.crt}"
@@ -25,19 +11,24 @@ if [ "${LDAP_ENABLE_TLS:-no}" = "yes" ]; then
     CERT_DIR=$(dirname "$CERT_FILE")
     mkdir -p "$CERT_DIR"
 
+    # Temporarily chown to root for creation, then back to 1001 for the service
+    chown -R root:root "$CERT_DIR"
+
     if [ ! -f "$CERT_FILE" ] || [ ! -f "$KEY_FILE" ]; then
         echo "TLS enabled but certificates not found. Generating self-signed (snakeoil) certificates..."
         # Generate CA
         openssl req -new -x509 -nodes -days 3650 -subj "/CN=LDAP-Local-CA" -keyout "$CA_FILE" -out "$CA_FILE"
         # Generate Server Cert
-        openssl req -new -newkey rsa:4096 -days 3650 -nodes -x509 \
-            -subj "/CN=${LDAP_DOMAIN:-localhost}" \
-            -keyout "$KEY_FILE" \
+        openssl req -new -newkey rsa:4096 -days 3650 -nodes -x509 \\
+            -subj "/CN=${LDAP_DOMAIN:-localhost}" \\
+            -keyout "$KEY_FILE" \\
             -out "$CERT_FILE"
         echo "Certificates generated successfully at $CERT_DIR"
     else
         echo "TLS certificates already exist at $CERT_DIR"
     fi
+    # Revert ownership for the unprivileged LDAP service
+    chown -R 1001:1001 "$CERT_DIR"
 fi
 
 # Map generic LDAP variables to Bitnami-specific variables
@@ -85,9 +76,9 @@ o: ${LDAP_ORGANIZATION}
 LDIF
 
 if [ \$? -eq 0 ]; then
-    echo "Organization successfully updated to ${LDAP_ORGANIZATION}"
+    echo "Organization successfully updated to \${LDAP_ORGANIZATION}"
 else
-    echo "Warning: Failed to update Organization to ${LDAP_ORGANIZATION}"
+    echo "Warning: Failed to update Organization to \${LDAP_ORGANIZATION}"
 fi
 
 # Stop the LDAP server again so Bitnami's initialization script can continue cleanly
@@ -96,35 +87,9 @@ EOF
     chmod +x /docker-entrypoint-initdb.d/99-set-org.sh
 fi
 
-# Generate snakeoil TLS certificate if enabled and missing
-if [ "${LDAP_ENABLE_TLS:-no}" = "yes" ]; then
-    CERT_FILE="${LDAP_TLS_CERT_FILE:-/opt/bitnami/openldap/certs/openldap.crt}"
-    KEY_FILE="${LDAP_TLS_KEY_FILE:-/opt/bitnami/openldap/certs/openldap.key}"
-    CA_FILE="${LDAP_TLS_CA_FILE:-/opt/bitnami/openldap/certs/openldapCA.crt}"
-    
-    CERT_DIR=$(dirname "$CERT_FILE")
-    mkdir -p "$CERT_DIR"
-
-    if [ ! -f "$CERT_FILE" ] || [ ! -f "$KEY_FILE" ]; then
-        echo "TLS enabled but certificates not found. Generating self-signed (snakeoil) certificates..."
-        # Generate CA
-        openssl req -new -x509 -nodes -days 3650 -subj "/CN=LDAP-Local-CA" -keyout "$CA_FILE" -out "$CA_FILE"
-        # Generate Server Cert
-        openssl req -new -newkey rsa:4096 -days 3650 -nodes -x509 \
-            -subj "/CN=${LDAP_DOMAIN:-localhost}" \
-            -keyout "$KEY_FILE" \
-            -out "$CERT_FILE"
-        echo "Certificates generated successfully at $CERT_DIR"
-    else
-        echo "TLS certificates already exist at $CERT_DIR"
-    fi
-fi
-
-# Background task to check and update the admin password on startup if it diverges
+# Prepare LDAP_ADMIN_PASSWORD for Bitnami's entrypoint if LDAP_ADMIN_PASSWORD_FILE is used
 if [ -n "$LDAP_ADMIN_PASSWORD_FILE" ] && [ -f "$LDAP_ADMIN_PASSWORD_FILE" ]; then
-    CURRENT_PASSWORD=$(cat "$LDAP_ADMIN_PASSWORD_FILE")
-elif [ -n "$LDAP_ADMIN_PASSWORD" ]; then
-    CURRENT_PASSWORD="$LDAP_ADMIN_PASSWORD"
+    export LDAP_ADMIN_PASSWORD="$(cat "$LDAP_ADMIN_PASSWORD_FILE")"
 fi
 
 # Background task to check and update TLS configuration and admin password on startup if they diverge
@@ -185,5 +150,5 @@ EOF
     fi
 ) &
 
-# Execute Bitnami's entrypoint which handles the rest, passing all arguments
+# Execute Bitnami\'s entrypoint which handles the rest, passing all arguments
 exec /opt/bitnami/scripts/openldap/entrypoint.sh "$@"
