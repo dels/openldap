@@ -90,11 +90,11 @@ EOF
 
     # Check if the admin password in the file diverges from the database and update if necessary
     if [ -n "$LDAP_ADMIN_PASSWORD_FILE" ] && [ -f "$LDAP_ADMIN_PASSWORD_FILE" ]; then
-        DB_DN=\$(ldapsearch -Y EXTERNAL -H ldapi:/// -b cn=config "(olcRootDN=*)" dn -LLL | grep '^dn:' | head -n 1 | awk '{print \$2}')
-        ADMIN_DN=\$(ldapsearch -Y EXTERNAL -H ldapi:/// -b cn=config "(olcRootDN=*)" olcRootDN -LLL | grep '^olcRootDN:' | head -n 1 | awk -F": " '{print \$2}')
+        DB_DN=$(ldapsearch -Y EXTERNAL -H ldapi:/// -b cn=config "(olcRootDN=*)" dn -LLL | grep '^dn:' | head -n 1 | awk '{print $2}')
+        ADMIN_DN=$(ldapsearch -Y EXTERNAL -H ldapi:/// -b cn=config "(olcRootDN=*)" olcRootDN -LLL | grep '^olcRootDN:' | head -n 1 | awk -F": " '{print $2}')
         if [ -n "$DB_DN" ] && [ -n "$ADMIN_DN" ]; then
             if ! ldapwhoami -x -D "$ADMIN_DN" -y "$LDAP_ADMIN_PASSWORD_FILE" -H ldapi:/// >/dev/null 2>&1; then
-                NEW_HASH=\$(slappasswd -h {SSHA} -y "$LDAP_ADMIN_PASSWORD_FILE")
+                NEW_HASH=$(slappasswd -h {SSHA} -y "$LDAP_ADMIN_PASSWORD_FILE")
                 ldapmodify -Y EXTERNAL -H ldapi:/// <<EOF
 dn: $DB_DN
 changetype: modify
