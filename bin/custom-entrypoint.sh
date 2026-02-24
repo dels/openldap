@@ -2,6 +2,15 @@
 # /exec/custom-entrypoint.sh
 set -e
 
+# If running as root, fix volume permissions and drop to unprivileged user
+if [ "$(id -u)" = "0" ]; then
+    echo "Running as root. Fixing permissions for /bitnami/openldap..."
+    mkdir -p /bitnami/openldap/data
+    chown -R 1001:1001 /bitnami/openldap
+    # Execute the script again as user 1001 using gosu
+    exec gosu 1001 "$0" "$@"
+fi
+
 # Map generic LDAP variables to Bitnami-specific variables
 if [ -n "$LDAP_BASE_DN" ]; then
     export LDAP_ROOT="$LDAP_BASE_DN"

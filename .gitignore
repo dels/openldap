@@ -5,6 +5,9 @@ ldap/data/data/*.mdb
 ldap/data/data/.*
 ldap_admin_password.txt
 
+# docker related
+docker-compose.override.yml
+
 # dot env 
 .env
 .env.production
