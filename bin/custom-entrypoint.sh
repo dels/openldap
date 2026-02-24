@@ -71,8 +71,9 @@ echo "Updating Organization to: ${LDAP_ORGANIZATION}"
 ldap_start_bg
 
 # Execute ldapmodify to change the organization attribute using ldaps to meet TLS requirements
-LDAPTLS_REQCERT=never ldapmodify -x -D "cn=${LDAP_ADMIN_USERNAME:-admin},${LDAP_ROOT:-dc=example,dc=org}" -w "${CURRENT_PASSWORD}" -H "ldaps://localhost:${LDAP_LDAPS_PORT_NUMBER:-636}" <<LDIF
-dn: ${LDAP_ROOT:-dc=example,dc=org}
+# The password is read directly from the secret file by ldapmodify.
+LDAPTLS_REQCERT=never ldapmodify -x -D "cn=\${LDAP_ADMIN_USERNAME:-admin},\${LDAP_ROOT:-dc=example,dc=org}" -y "\${LDAP_ADMIN_PASSWORD_FILE}" -H "ldaps://localhost:\${LDAP_LDAPS_PORT_NUMBER:-636}" <<LDIF
+dn: \${LDAP_ROOT:-dc=example,dc=org}
 changetype: modify
 replace: o
 o: ${LDAP_ORGANIZATION}
@@ -153,16 +154,16 @@ EOF
         fi
     fi
 
-    if [ -n "$CURRENT_PASSWORD" ]; then
+    if [ -n "$LDAP_ADMIN_PASSWORD_FILE" ] && [ -f "$LDAP_ADMIN_PASSWORD_FILE" ]; then
         # Extract the DB DN and Admin DN from the live configuration
         DB_DN=$(ldapsearch -Y EXTERNAL -H ldapi:/// -b cn=config "(olcRootDN=*)" dn -LLL | grep ^dn: | head -n 1 | awk '{print $2}')
         ADMIN_DN=$(ldapsearch -Y EXTERNAL -H ldapi:/// -b cn=config "(olcRootDN=*)" olcRootDN -LLL | grep ^olcRootDN: | head -n 1 | awk -F": " '{print $2}')
         
         if [ -n "$DB_DN" ] && [ -n "$ADMIN_DN" ]; then
-            # Check if the current environment password works against the server
-            if ! ldapwhoami -x -D "$ADMIN_DN" -w "$CURRENT_PASSWORD" -H ldapi:/// >/dev/null 2>&1; then
+            # Check if the current password file works against the server
+            if ! ldapwhoami -x -D "$ADMIN_DN" -y "$LDAP_ADMIN_PASSWORD_FILE" -H ldapi:/// >/dev/null 2>&1; then
                 echo "Admin password changed. Updating database configuration..."
-                NEW_HASH=$(slappasswd -h {SSHA} -s "$CURRENT_PASSWORD")
+                NEW_HASH=$(slappasswd -h {SSHA} -s "$(cat "$LDAP_ADMIN_PASSWORD_FILE")")
                 ldapmodify -Y EXTERNAL -H ldapi:/// <<EOF
 dn: $DB_DN
 changetype: modify
