@@ -10,8 +10,8 @@ services:
       - LDAP_ORGANIZATION=${LDAP_ORGANIZATION:-Example Organization}
 
       # -- Standard Ports --
-      - LDAP_PORT_NUMBER=${LDAP_PORT_NUMBER:-1389}
-      - LDAP_LDAPS_PORT_NUMBER=${LDAP_LDAPS_PORT_NUMBER:-1636}
+      - LDAP_PORT_NUMBER=${LDAP_PORT_NUMBER:-389}
+      - LDAP_LDAPS_PORT_NUMBER=${LDAP_LDAPS_PORT_NUMBER:-636}
 
       # -- Bitnami OpenLDAP Standard Variables --
       - LDAP_ROOT=${LDAP_ROOT:-dc=example,dc=org}
@@ -22,11 +22,11 @@ services:
       - LDAP_CONFIG_ADMIN_PASSWORD=${LDAP_CONFIG_ADMIN_PASSWORD:-configpassword}
       
       # -- User and Group Provisioning --
-      - LDAP_USERS=${LDAP_USERS:-user01,user02}
-      - LDAP_PASSWORDS=${LDAP_PASSWORDS:-bitnami1,bitnami2}
+      - LDAP_USERS=${LDAP_USERS:-}
+      - LDAP_PASSWORDS=${LDAP_PASSWORDS:-}
       - LDAP_USER_OU=${LDAP_USER_OU:-users}
       - LDAP_GROUP_OU=${LDAP_GROUP_OU:-groups}
-      - LDAP_GROUP=${LDAP_GROUP:-readers}
+      - LDAP_GROUP=${LDAP_GROUP:-}
 
       # -- Schemas and Custom Scripts --
       - LDAP_ADD_SCHEMAS=${LDAP_ADD_SCHEMAS:-yes}
@@ -68,6 +68,14 @@ services:
       - SETGID
       - SETUID
     ports:
-      - "${HOST_LDAP_PORT:-389}:${LDAP_PORT_NUMBER:-1389}"
-      - "${HOST_LDAPS_PORT:-636}:${LDAP_LDAPS_PORT_NUMBER:-1636}"
+      - "${HOST_LDAP_PORT:-389}:${LDAP_PORT_NUMBER:-389}"
+      - "${HOST_LDAPS_PORT:-636}:${LDAP_LDAPS_PORT_NUMBER:-636}"
+    deploy:
+      resources:
+        limits:
+          cpus: '${LDAP_CPUS:-2}'
+          memory: '${LDAP_MEMORY:-2G}'
+        reservations:
+          cpus: '${LDAP_CPUS_RESERVATION:-0.2}'
+          memory: '${LDAP_MEMORY_RESERVATION:-256M}'
     restart: unless-stopped

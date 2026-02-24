@@ -46,8 +46,8 @@ echo "Updating Organization to: ${LDAP_ORGANIZATION}"
 # Start the LDAP server in the background
 ldap_start_bg
 
-# Execute ldapmodify to change the organization attribute using local socket authentication
-ldapmodify -Y EXTERNAL -H "ldapi:///" <<LDIF
+# Execute ldapmodify to change the organization attribute using ldaps to meet TLS requirements
+LDAPTLS_REQCERT=never ldapmodify -x -D "cn=${LDAP_ADMIN_USERNAME:-admin},${LDAP_ROOT:-dc=example,dc=org}" -w "${CURRENT_PASSWORD}" -H "ldaps://localhost:${LDAP_LDAPS_PORT_NUMBER:-636}" <<LDIF
 dn: ${LDAP_ROOT:-dc=example,dc=org}
 changetype: modify
 replace: o

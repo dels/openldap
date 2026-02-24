@@ -1,0 +1,16 @@
+networks:
+  ldap_network:
+    driver: macvlan
+    enable_ipv6: true
+    driver_opts:
+      parent: br0
+    ipam:
+      config:
+        - subnet: "2001:db8::/64"
+          gateway: "2001:db8::1"
+
+services:
+  openldap:
+    networks:
+      ldap_network:
+        ipv6_address: "2001:db8::389/64"
