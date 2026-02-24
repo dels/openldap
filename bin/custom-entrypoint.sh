@@ -37,8 +37,8 @@ echo "Updating Organization to: ${LDAP_ORGANIZATION}"
 # Start the LDAP server in the background
 ldap_start_bg
 
-# Execute ldapmodify to change the organization attribute
-ldapmodify -x -D "cn=${LDAP_ADMIN_USERNAME:-admin},${LDAP_ROOT:-dc=example,dc=org}" -w "${LDAP_ADMIN_PASSWORD:-adminpassword}" -H "ldapi:///" <<LDIF
+# Execute ldapmodify to change the organization attribute using local socket authentication
+ldapmodify -Y EXTERNAL -H "ldapi:///" <<LDIF
 dn: ${LDAP_ROOT:-dc=example,dc=org}
 changetype: modify
 replace: o
@@ -79,6 +79,45 @@ if [ "${LDAP_ENABLE_TLS:-no}" = "yes" ]; then
     else
         echo "TLS certificates already exist at $CERT_DIR"
     fi
+fi
+
+# Background task to check and update the admin password on startup if it diverges
+if [ -n "$LDAP_ADMIN_PASSWORD_FILE" ] && [ -f "$LDAP_ADMIN_PASSWORD_FILE" ]; then
+    CURRENT_PASSWORD=$(cat "$LDAP_ADMIN_PASSWORD_FILE")
+elif [ -n "$LDAP_ADMIN_PASSWORD" ]; then
+    CURRENT_PASSWORD="$LDAP_ADMIN_PASSWORD"
+fi
+
+if [ -n "$CURRENT_PASSWORD" ]; then
+    (
+        # Wait until ldap is ready on ldapi:///
+        while ! ldapsearch -Y EXTERNAL -H ldapi:/// -b cn=config -s base >/dev/null 2>&1; do
+            sleep 2
+        done
+        
+        # Extract the DB DN and Admin DN from the live configuration
+        DB_DN=$(ldapsearch -Y EXTERNAL -H ldapi:/// -b cn=config "(olcRootDN=*)" dn -LLL | grep ^dn: | head -n 1 | awk '{print $2}')
+        ADMIN_DN=$(ldapsearch -Y EXTERNAL -H ldapi:/// -b cn=config "(olcRootDN=*)" olcRootDN -LLL | grep ^olcRootDN: | head -n 1 | awk -F": " '{print $2}')
+        
+        if [ -n "$DB_DN" ] && [ -n "$ADMIN_DN" ]; then
+            # Check if the current environment password works against the server
+            if ! ldapwhoami -x -D "$ADMIN_DN" -w "$CURRENT_PASSWORD" -H ldapi:/// >/dev/null 2>&1; then
+                echo "Admin password changed. Updating database configuration..."
+                NEW_HASH=$(slappasswd -h {SSHA} -s "$CURRENT_PASSWORD")
+                ldapmodify -Y EXTERNAL -H ldapi:/// <<EOF
+dn: $DB_DN
+changetype: modify
+replace: olcRootPW
+olcRootPW: $NEW_HASH
+EOF
+                if [ $? -eq 0 ]; then
+                    echo "Admin password successfully updated in database."
+                else
+                    echo "Warning: Failed to update admin password in database."
+                fi
+            fi
+        fi
+    ) &
 fi
 
 # Execute Bitnami's entrypoint which handles the rest, passing all arguments

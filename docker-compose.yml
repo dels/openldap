@@ -2,7 +2,6 @@ services:
   openldap:
     build: ./
     container_name: openldap
-    user: root
     environment:
       # -- Custom Entrypoint Variables --
       - LDAP_DOMAIN=${LDAP_DOMAIN:-example.org}
@@ -17,7 +16,7 @@ services:
       # -- Bitnami OpenLDAP Standard Variables --
       - LDAP_ROOT=${LDAP_ROOT:-dc=example,dc=org}
       - LDAP_ADMIN_USERNAME=${LDAP_ADMIN_USERNAME:-admin}
-      - LDAP_ADMIN_PASSWORD=${LDAP_ADMIN_PASSWORD:-adminpassword}
+      - LDAP_ADMIN_PASSWORD_FILE=${LDAP_ADMIN_PASSWORD_FILE:-/run/secrets/ldap_admin_password}
       - LDAP_CONFIG_ADMIN_ENABLED=${LDAP_CONFIG_ADMIN_ENABLED:-no}
       - LDAP_CONFIG_ADMIN_USERNAME=${LDAP_CONFIG_ADMIN_USERNAME:-admin}
       - LDAP_CONFIG_ADMIN_PASSWORD=${LDAP_CONFIG_ADMIN_PASSWORD:-configpassword}
@@ -39,9 +38,9 @@ services:
 
       # -- Server Settings --
       - LDAP_ULIMIT_NOFILES=${LDAP_ULIMIT_NOFILES:-1024}
-      - LDAP_ALLOW_ANON_BINDING=${LDAP_ALLOW_ANON_BINDING:-yes}
+      - LDAP_ALLOW_ANON_BINDING=${LDAP_ALLOW_ANON_BINDING:-no}
       - LDAP_LOGLEVEL=${LDAP_LOGLEVEL:-256}
-      - LDAP_DEBUG_LEVEL=${LDAP_DEBUG_LEVEL:-32768}
+      - LDAP_DEBUG_LEVEL=${LDAP_DEBUG_LEVEL:-256}
       - LDAP_PASSWORD_HASH=${LDAP_PASSWORD_HASH:-{SSHA}}
 
       # -- Password Policy (ppolicy) --
@@ -51,13 +50,20 @@ services:
 
       # -- TLS Settings --
       - LDAP_ENABLE_TLS=${LDAP_ENABLE_TLS:-yes}
-      - LDAP_REQUIRE_TLS=${LDAP_REQUIRE_TLS:-no}
+      - LDAP_REQUIRE_TLS=${LDAP_REQUIRE_TLS:-yes}
       - LDAP_TLS_CERT_FILE=${LDAP_TLS_CERT_FILE:-/opt/bitnami/openldap/certs/openldap.crt}
       - LDAP_TLS_KEY_FILE=${LDAP_TLS_KEY_FILE:-/opt/bitnami/openldap/certs/openldap.key}
       - LDAP_TLS_CA_FILE=${LDAP_TLS_CA_FILE:-/opt/bitnami/openldap/certs/openldapCA.crt}
       - LDAP_TLS_DH_PARAMS_FILE=${LDAP_TLS_DH_PARAMS_FILE:-}
     volumes:
       - ./ldap/data:/bitnami/openldap
+      - ./ldap_admin_password.txt:/run/secrets/ldap_admin_password:ro
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
     ports:
       - "${HOST_LDAP_PORT:-389}:${LDAP_PORT_NUMBER:-1389}"
       - "${HOST_LDAPS_PORT:-636}:${LDAP_LDAPS_PORT_NUMBER:-1636}"
