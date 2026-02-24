@@ -1,0 +1,64 @@
+services:
+  openldap:
+    build: ./
+    container_name: openldap
+    user: root
+    environment:
+      # -- Custom Entrypoint Variables --
+      - LDAP_DOMAIN=${LDAP_DOMAIN:-example.org}
+      - LDAP_BASE_DN=${LDAP_BASE_DN:-dc=example,dc=org}
+      - LDAP_ADMIN_DN=${LDAP_ADMIN_DN:-cn=admin,dc=example,dc=org}
+      - LDAP_ORGANIZATION=${LDAP_ORGANIZATION:-Example Organization}
+
+      # -- Standard Ports --
+      - LDAP_PORT_NUMBER=${LDAP_PORT_NUMBER:-1389}
+      - LDAP_LDAPS_PORT_NUMBER=${LDAP_LDAPS_PORT_NUMBER:-1636}
+
+      # -- Bitnami OpenLDAP Standard Variables --
+      - LDAP_ROOT=${LDAP_ROOT:-dc=example,dc=org}
+      - LDAP_ADMIN_USERNAME=${LDAP_ADMIN_USERNAME:-admin}
+      - LDAP_ADMIN_PASSWORD=${LDAP_ADMIN_PASSWORD:-adminpassword}
+      - LDAP_CONFIG_ADMIN_ENABLED=${LDAP_CONFIG_ADMIN_ENABLED:-no}
+      - LDAP_CONFIG_ADMIN_USERNAME=${LDAP_CONFIG_ADMIN_USERNAME:-admin}
+      - LDAP_CONFIG_ADMIN_PASSWORD=${LDAP_CONFIG_ADMIN_PASSWORD:-configpassword}
+      
+      # -- User and Group Provisioning --
+      - LDAP_USERS=${LDAP_USERS:-user01,user02}
+      - LDAP_PASSWORDS=${LDAP_PASSWORDS:-bitnami1,bitnami2}
+      - LDAP_USER_OU=${LDAP_USER_OU:-users}
+      - LDAP_GROUP_OU=${LDAP_GROUP_OU:-groups}
+      - LDAP_GROUP=${LDAP_GROUP:-readers}
+
+      # -- Schemas and Custom Scripts --
+      - LDAP_ADD_SCHEMAS=${LDAP_ADD_SCHEMAS:-yes}
+      - LDAP_EXTRA_SCHEMAS=${LDAP_EXTRA_SCHEMAS:-cosine, inetorgperson, nis}
+      - LDAP_SKIP_DEFAULT_TREE=${LDAP_SKIP_DEFAULT_TREE:-no}
+      - LDAP_CUSTOM_LDIF_DIR=${LDAP_CUSTOM_LDIF_DIR:-/ldifs}
+      - LDAP_CUSTOM_SCHEMA_FILE=${LDAP_CUSTOM_SCHEMA_FILE:-/schema/custom.ldif}
+      - LDAP_CUSTOM_SCHEMA_DIR=${LDAP_CUSTOM_SCHEMA_DIR:-/schemas}
+
+      # -- Server Settings --
+      - LDAP_ULIMIT_NOFILES=${LDAP_ULIMIT_NOFILES:-1024}
+      - LDAP_ALLOW_ANON_BINDING=${LDAP_ALLOW_ANON_BINDING:-yes}
+      - LDAP_LOGLEVEL=${LDAP_LOGLEVEL:-256}
+      - LDAP_DEBUG_LEVEL=${LDAP_DEBUG_LEVEL:-32768}
+      - LDAP_PASSWORD_HASH=${LDAP_PASSWORD_HASH:-{SSHA}}
+
+      # -- Password Policy (ppolicy) --
+      - LDAP_CONFIGURE_PPOLICY=${LDAP_CONFIGURE_PPOLICY:-no}
+      - LDAP_PPOLICY_USE_LOCKOUT=${LDAP_PPOLICY_USE_LOCKOUT:-no}
+      - LDAP_PPOLICY_HASH_CLEARTEXT=${LDAP_PPOLICY_HASH_CLEARTEXT:-no}
+
+      # -- TLS Settings --
+      - LDAP_ENABLE_TLS=${LDAP_ENABLE_TLS:-yes}
+      - LDAP_REQUIRE_TLS=${LDAP_REQUIRE_TLS:-no}
+      - LDAP_TLS_CERT_FILE=${LDAP_TLS_CERT_FILE:-/opt/bitnami/openldap/certs/openldap.crt}
+      - LDAP_TLS_KEY_FILE=${LDAP_TLS_KEY_FILE:-/opt/bitnami/openldap/certs/openldap.key}
+      - LDAP_TLS_CA_FILE=${LDAP_TLS_CA_FILE:-/opt/bitnami/openldap/certs/openldapCA.crt}
+      - LDAP_TLS_DH_PARAMS_FILE=${LDAP_TLS_DH_PARAMS_FILE:-}
+    volumes:
+      - ./ldap/data:/bitnami/openldap
+    ports:
+      - "${HOST_LDAP_PORT:-389}:${LDAP_PORT_NUMBER:-1389}"
+      - "${HOST_LDAPS_PORT:-636}:${LDAP_LDAPS_PORT_NUMBER:-1636}"
+    restart: unless-stopped

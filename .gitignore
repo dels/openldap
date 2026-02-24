@@ -1,0 +1,14 @@
+
+# ldap data should not be part of
+ldap/data/data/*.mdb
+**/*.ldif
+ldap/data/data/.*
+
+# dot env 
+.env
+.env.production
+.env.test
+
+# emacs
+*~
+#*#
