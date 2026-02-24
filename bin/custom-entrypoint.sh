@@ -2,8 +2,7 @@
 # /exec/custom-entrypoint.sh
 set -e
 
-# This script now runs entirely as root.
-# Bitnami's entrypoint will handle the final privilege drop for the slapd process.
+# This script runs as root. Bitnami's entrypoint will handle the final privilege drop.
 
 # Generate snakeoil TLS certificate if enabled and missing
 if [ "${LDAP_ENABLE_TLS:-no}" = "yes" ]; then
@@ -14,17 +13,20 @@ if [ "${LDAP_ENABLE_TLS:-no}" = "yes" ]; then
     CERT_DIR=$(dirname "$CERT_FILE")
     mkdir -p "$CERT_DIR"
 
+    # Temporarily take ownership to create certs, then revert for the unprivileged slapd process.
+    chown root:root "$CERT_DIR"
+
     if [ ! -f "$CERT_FILE" ] || [ ! -f "$KEY_FILE" ]; then
         echo "TLS enabled but certificates not found. Generating self-signed (snakeoil) certificates..."
         openssl req -new -newkey rsa:4096 -days 3650 -nodes -x509 \
             -subj "/CN=${LDAP_DOMAIN:-localhost}" \
             -keyout "$KEY_FILE" \
             -out "$CERT_FILE"
-        # The CA is self-signed in this case
+        # In a snakeoil setup, the cert is its own CA.
         cp "$CERT_FILE" "$CA_FILE"
         echo "Certificates generated successfully at $CERT_DIR"
     fi
-    # Ensure final ownership is correct for the slapd process
+    # Revert ownership so the slapd process (running as 1001) can read the certs.
     chown -R 1001:1001 "$CERT_DIR"
 fi
 
@@ -32,11 +34,9 @@ fi
 if [ -n "$LDAP_BASE_DN" ]; then
     export LDAP_ROOT="$LDAP_BASE_DN"
 fi
-
 if [ -n "$LDAP_DOMAIN" ] && [ -z "$LDAP_ROOT" ]; then
     export LDAP_ROOT=$(echo "$LDAP_DOMAIN" | sed 's/\./,dc=/g' | sed 's/^/dc=/')
 fi
-
 if [ -n "$LDAP_ADMIN_DN" ]; then
     EXTRACTED_USER=$(echo "$LDAP_ADMIN_DN" | sed -n 's/^cn=\([^,]*\).*$/\1/p')
     if [ -n "$EXTRACTED_USER" ]; then
@@ -67,8 +67,10 @@ fi
 
 # Background task to check/update TLS config and password
 (
+    # Wait for ldapi to be available
     while ! ldapsearch -Y EXTERNAL -H ldapi:/// -b cn=config -s base >/dev/null 2>&1; do sleep 2; done
     
+    # Ensure TLS is configured in the database if enabled
     if [ "${LDAP_ENABLE_TLS:-no}" = "yes" ]; then
         if ! ldapsearch -Y EXTERNAL -H ldapi:/// -b cn=config "(olcTLSCertificateFile=*)" | grep -q "olcTLSCertificateFile"; then
             ldapmodify -Y EXTERNAL -H ldapi:/// <<EOF
@@ -86,12 +88,13 @@ EOF
         fi
     fi
 
+    # Check if the admin password in the file diverges from the database and update if necessary
     if [ -n "$LDAP_ADMIN_PASSWORD_FILE" ] && [ -f "$LDAP_ADMIN_PASSWORD_FILE" ]; then
-        DB_DN=\$(ldapsearch -Y EXTERNAL -H ldapi:/// -b cn=config "(olcRootDN=*)" dn -LLL | grep ^dn: | head -n 1 | awk '{print \$2}')
-        ADMIN_DN=\$(ldapsearch -Y EXTERNAL -H ldapi:/// -b cn=config "(olcRootDN=*)" olcRootDN -LLL | grep ^olcRootDN: | head -n 1 | awk -F": " '{print \$2}')
+        DB_DN=\$(ldapsearch -Y EXTERNAL -H ldapi:/// -b cn=config "(olcRootDN=*)" dn -LLL | grep '^dn:' | head -n 1 | awk '{print \$2}')
+        ADMIN_DN=\$(ldapsearch -Y EXTERNAL -H ldapi:/// -b cn=config "(olcRootDN=*)" olcRootDN -LLL | grep '^olcRootDN:' | head -n 1 | awk -F": " '{print \$2}')
         if [ -n "$DB_DN" ] && [ -n "$ADMIN_DN" ]; then
             if ! ldapwhoami -x -D "$ADMIN_DN" -y "$LDAP_ADMIN_PASSWORD_FILE" -H ldapi:/// >/dev/null 2>&1; then
-                NEW_HASH=\$(slappasswd -h {SSHA} -s "$(cat "$LDAP_ADMIN_PASSWORD_FILE")")
+                NEW_HASH=\$(slappasswd -h {SSHA} -y "$LDAP_ADMIN_PASSWORD_FILE")
                 ldapmodify -Y EXTERNAL -H ldapi:/// <<EOF
 dn: $DB_DN
 changetype: modify
