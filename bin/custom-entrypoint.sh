@@ -4,9 +4,14 @@ set -e
 
 # If running as root, fix volume permissions and drop to unprivileged user
 if [ "$(id -u)" = "0" ]; then
-    echo "Running as root. Fixing permissions for /bitnami/openldap..."
-    mkdir -p /bitnami/openldap/data
-    chown -R 1001:1001 /bitnami/openldap
+    # Ensure the base directory exists
+    mkdir -p /bitnami/openldap
+    # On first run, the volume will be owned by root. Fix ownership.
+    # On subsequent runs, the owner will be 1001, so this check will be skipped, avoiding permission errors.
+    if [ "$(stat -c '%u' /bitnami/openldap)" != "1001" ]; then
+        echo "Volume owned by root, setting initial permissions..."
+        chown -R 1001:1001 /bitnami/openldap
+    fi
     # Execute the script again as user 1001 using gosu
     exec gosu 1001 "$0" "$@"
 fi
