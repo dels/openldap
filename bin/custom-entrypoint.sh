@@ -19,9 +19,9 @@ if [ "${LDAP_ENABLE_TLS:-no}" = "yes" ]; then
         # Generate CA
         openssl req -new -x509 -nodes -days 3650 -subj "/CN=LDAP-Local-CA" -keyout "$CA_FILE" -out "$CA_FILE"
         # Generate Server Cert
-        openssl req -new -newkey rsa:4096 -days 3650 -nodes -x509 \\
-            -subj "/CN=${LDAP_DOMAIN:-localhost}" \\
-            -keyout "$KEY_FILE" \\
+        openssl req -new -newkey rsa:4096 -days 3650 -nodes -x509 \
+            -subj "/CN=${LDAP_DOMAIN:-localhost}" \
+            -keyout "$KEY_FILE" \
             -out "$CERT_FILE"
         echo "Certificates generated successfully at $CERT_DIR"
     else
