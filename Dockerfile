@@ -11,10 +11,10 @@ RUN sed -i 's/bookworm/trixie/g' /etc/apt/sources.list && \
 
 # Create the initialization directory and custom entrypoint directory
 RUN mkdir -p /docker-entrypoint-initdb.d /exec /opt/bitnami/openldap/certs && \
-    chown -R root:root /docker-entrypoint-initdb.d /exec /opt/bitnami/openldap/certs
+    chown -R root:root /docker-entrypoint-initdb.d /exec
 
 # Copy our custom entrypoint wrapper
-COPY --chown=1001:1001 bin/custom-entrypoint.sh /exec/custom-entrypoint.sh
+COPY --chown=root:root bin/custom-entrypoint.sh /exec/custom-entrypoint.sh
 RUN chmod +x /exec/custom-entrypoint.sh
 
 # The default Bitnami ENTRYPOINT is ["/opt/bitnami/scripts/openldap/entrypoint.sh"]
