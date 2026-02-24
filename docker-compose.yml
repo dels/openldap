@@ -2,6 +2,7 @@ services:
   openldap:
     build: ./
     container_name: openldap
+    # We now rely entirely on the base image's USER and entrypoint logic.
     environment:
       # -- Custom Entrypoint Variables --
       - LDAP_DOMAIN=${LDAP_DOMAIN:-example.org}
@@ -16,7 +17,7 @@ services:
       # -- Bitnami OpenLDAP Standard Variables --
       - LDAP_ROOT=${LDAP_ROOT:-dc=example,dc=org}
       - LDAP_ADMIN_USERNAME=${LDAP_ADMIN_USERNAME:-admin}
-      - LDAP_ADMIN_PASSWORD_FILE=${LDAP_ADMIN_PASSWORD_FILE:-/run/secrets/ldap_admin_password}
+      - LDAP_ADMIN_PASSWORD_FILE=/run/secrets/ldap_admin_password # Note: Path is now absolute inside container
       - LDAP_CONFIG_ADMIN_ENABLED=${LDAP_CONFIG_ADMIN_ENABLED:-no}
       - LDAP_CONFIG_ADMIN_USERNAME=${LDAP_CONFIG_ADMIN_USERNAME:-admin}
       - LDAP_CONFIG_ADMIN_PASSWORD=${LDAP_CONFIG_ADMIN_PASSWORD:-configpassword}
@@ -32,9 +33,6 @@ services:
       - LDAP_ADD_SCHEMAS=${LDAP_ADD_SCHEMAS:-yes}
       - LDAP_EXTRA_SCHEMAS=${LDAP_EXTRA_SCHEMAS:-cosine, inetorgperson, nis}
       - LDAP_SKIP_DEFAULT_TREE=${LDAP_SKIP_DEFAULT_TREE:-no}
-      - LDAP_CUSTOM_LDIF_DIR=${LDAP_CUSTOM_LDIF_DIR:-/ldifs}
-      - LDAP_CUSTOM_SCHEMA_FILE=${LDAP_CUSTOM_SCHEMA_FILE:-/schema/custom.ldif}
-      - LDAP_CUSTOM_SCHEMA_DIR=${LDAP_CUSTOM_SCHEMA_DIR:-/schemas}
 
       # -- Server Settings --
       - LDAP_ULIMIT_NOFILES=${LDAP_ULIMIT_NOFILES:-1024}
@@ -51,9 +49,9 @@ services:
       # -- TLS Settings --
       - LDAP_ENABLE_TLS=${LDAP_ENABLE_TLS:-yes}
       - LDAP_REQUIRE_TLS=${LDAP_REQUIRE_TLS:-yes}
-      - LDAP_TLS_CERT_FILE=${LDAP_TLS_CERT_FILE:-/opt/bitnami/openldap/certs/openldap.crt}
-      - LDAP_TLS_KEY_FILE=${LDAP_TLS_KEY_FILE:-/opt/bitnami/openldap/certs/openldap.key}
-      - LDAP_TLS_CA_FILE=${LDAP_TLS_CA_FILE:-/opt/bitnami/openldap/certs/openldapCA.crt}
+      - LDAP_TLS_CERT_FILE=/opt/bitnami/openldap/certs/openldap.crt
+      - LDAP_TLS_KEY_FILE=/opt/bitnami/openldap/certs/openldap.key
+      - LDAP_TLS_CA_FILE=/opt/bitnami/openldap/certs/openldapCA.crt
       - LDAP_TLS_DH_PARAMS_FILE=${LDAP_TLS_DH_PARAMS_FILE:-}
     volumes:
       - ./ldap/data:/bitnami/openldap
@@ -63,8 +61,8 @@ services:
     cap_drop:
       - ALL
     cap_add:
+      # Required by Bitnami to bind to low ports as non-root
       - NET_BIND_SERVICE
-      - CHOWN
     ports:
       - "${HOST_LDAP_PORT:-389}:${LDAP_PORT_NUMBER:-389}"
       - "${HOST_LDAPS_PORT:-636}:${LDAP_LDAPS_PORT_NUMBER:-636}"

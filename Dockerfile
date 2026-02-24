@@ -2,24 +2,28 @@ FROM bitnamilegacy/openldap:latest
 
 USER root
 
-# Upgrade Debian from Bookworm to Trixie for security updates
+# Upgrade to Trixie
 RUN sed -i 's/bookworm/trixie/g' /etc/apt/sources.list && \
     apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Create the initialization directory and custom entrypoint directory
-RUN mkdir -p /docker-entrypoint-initdb.d /exec /opt/bitnami/openldap/certs && \
-    chown -R root:root /docker-entrypoint-initdb.d /exec
+# Create certs directory and generate a snakeoil cert.
+# The certs will be owned by root, but readable by all.
+RUN mkdir -p /opt/bitnami/openldap/certs && \
+    openssl req -new -newkey rsa:4096 -days 3650 -nodes -x509 \
+        -subj "/CN=default-snakeoil-cert" \
+        -keyout /opt/bitnami/openldap/certs/openldap.key \
+        -out /opt/bitnami/openldap/certs/openldap.crt && \
+    cp /opt/bitnami/openldap/certs/openldap.crt /opt/bitnami/openldap/certs/openldapCA.crt && \
+    chown -R 1001:root /opt/bitnami/openldap/certs && \
+    chmod -R a+r /opt/bitnami/openldap/certs
 
-# Copy our custom entrypoint wrapper
-COPY --chown=root:root bin/custom-entrypoint.sh /exec/custom-entrypoint.sh
-RUN chmod +x /exec/custom-entrypoint.sh
+# Copy our custom initialization script.
+# Bitnami's entrypoint will automatically execute this at the right time.
+COPY bin/99-custom-setup.sh /docker-entrypoint-initdb.d/99-custom-setup.sh
+RUN chmod +x /docker-entrypoint-initdb.d/99-custom-setup.sh
 
-# The default Bitnami ENTRYPOINT is ["/opt/bitnami/scripts/openldap/entrypoint.sh"]
-# We replace it with our wrapper which then calls Bitnami's entrypoint.
-ENTRYPOINT [ "/exec/custom-entrypoint.sh" ]
-
-# The default Bitnami CMD is:
-CMD [ "/opt/bitnami/scripts/openldap/run.sh" ]
+# Revert to the default non-root user for the final image state
+USER 1001
