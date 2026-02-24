@@ -6,7 +6,6 @@ USER root
 RUN sed -i 's/bookworm/trixie/g' /etc/apt/sources.list && \
     apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y gosu && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
